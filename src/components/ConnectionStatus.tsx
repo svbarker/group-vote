@@ -14,7 +14,8 @@ export function ConnectionStatus() {
 
   return (
     <p className="text-muted-foreground text-sm">
-      Backend live · server time {new Date(ping.serverTime).toLocaleTimeString()}
+      Backend live · server time{' '}
+      {new Date(ping.serverTime).toLocaleTimeString()}
     </p>
   )
 }

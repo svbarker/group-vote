@@ -7,8 +7,7 @@ export const ROOM_CODE_LENGTH = 4
 
 // Largest multiple of the alphabet length that fits in a byte. Bytes at or above
 // this are rejected so every letter is equally likely (no modulo bias).
-const UNBIASED_CUTOFF =
-  256 - (256 % ROOM_CODE_ALPHABET.length)
+const UNBIASED_CUTOFF = 256 - (256 % ROOM_CODE_ALPHABET.length)
 
 // Default randomness: Web Crypto, available in Convex's V8 isolate and the
 // browser. Injectable so tests can feed a deterministic byte source.
