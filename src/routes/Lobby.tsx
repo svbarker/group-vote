@@ -1,31 +1,31 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { useMutation, useQuery } from 'convex/react'
+import { useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { Badge } from '@/components/gv/badge'
 import { Button } from '@/components/gv/button'
 import { Input } from '@/components/gv/input'
 import { getHostToken, getUserId } from '@/lib/identity'
+import { RoomShell } from './RoomShell'
+import type { PollState } from './Room'
 
-function LobbyShell({ children }: { children: ReactNode }) {
-  return (
-    <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-8 p-6">
-      {children}
-    </main>
-  )
-}
-
-export function Lobby() {
-  const { code = '' } = useParams()
+export function Lobby({ state, code }: { state: PollState; code: string }) {
   const navigate = useNavigate()
-  const state = useQuery(api.polls.getPollState, { code })
   const addOption = useMutation(api.polls.addOption)
+  const advancePhase = useMutation(api.polls.advancePhase)
   const myUserId = getUserId()
-  const isHost = getHostToken(code) !== null
+  const hostToken = getHostToken(code)
+  const isHost = hostToken !== null
 
   const [draft, setDraft] = useState('')
   const [addError, setAddError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
+  const [starting, setStarting] = useState(false)
+  const [startError, setStartError] = useState<string | null>(null)
+
+  const { poll, users, options } = state
+  const canAddOptions =
+    poll.phase === 'lobby' && (poll.allowUserOptions || isHost)
 
   async function handleAdd(e: FormEvent) {
     e.preventDefault()
@@ -43,38 +43,21 @@ export function Lobby() {
     }
   }
 
-  if (state === undefined) {
-    return (
-      <LobbyShell>
-        <p className="text-center text-muted-foreground">Loading room…</p>
-      </LobbyShell>
-    )
+  async function handleStart() {
+    if (!hostToken || starting) return
+    setStarting(true)
+    setStartError(null)
+    try {
+      await advancePhase({ code, hostToken })
+      // Phase flips server-side; the reactive query swaps this screen for Voting.
+    } catch {
+      setStartError('Could not start voting — please try again.')
+      setStarting(false)
+    }
   }
-
-  if (state === null) {
-    return (
-      <LobbyShell>
-        <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Room not found
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            No room with code{' '}
-            <span className="font-semibold uppercase">{code}</span>.
-          </p>
-        </div>
-        <Button className="w-full" onClick={() => navigate('/')}>
-          Back to home
-        </Button>
-      </LobbyShell>
-    )
-  }
-
-  const { poll, users, options } = state
-  const canAddOptions = poll.phase === 'lobby' && (poll.allowUserOptions || isHost)
 
   return (
-    <LobbyShell>
+    <RoomShell>
       <div className="space-y-3 text-center">
         <p className="text-muted-foreground text-xs tracking-wide uppercase">
           Room code
@@ -156,9 +139,25 @@ export function Lobby() {
       </section>
 
       {isHost ? (
-        <p className="text-center text-sm text-muted-foreground">
-          You&apos;re the host. Voting controls arrive next.
-        </p>
+        <div className="space-y-2">
+          <Button
+            className="w-full"
+            onClick={handleStart}
+            disabled={starting || options.length === 0}
+          >
+            {starting ? 'Starting…' : 'Start voting'}
+          </Button>
+          {options.length === 0 && (
+            <p className="text-center text-sm text-muted-foreground">
+              Add at least one option to start voting.
+            </p>
+          )}
+          {startError && (
+            <p role="alert" className="text-center text-sm text-destructive">
+              {startError}
+            </p>
+          )}
+        </div>
       ) : (
         <p className="text-center text-sm text-muted-foreground">
           Waiting for the host to start voting…
@@ -168,6 +167,6 @@ export function Lobby() {
       <Button variant="ghost" className="w-full" onClick={() => navigate('/')}>
         Leave
       </Button>
-    </LobbyShell>
+    </RoomShell>
   )
 }

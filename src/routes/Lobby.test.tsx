@@ -1,60 +1,57 @@
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter } from 'react-router-dom'
 import { Lobby } from './Lobby'
+import type { PollState } from './Room'
 
-// Mock the reactive hook so we can drive each render state deterministically
-// (see PLAN §2.5 — component tests mock the Convex hook rather than hit the net).
-const { useQueryMock } = vi.hoisted(() => ({ useQueryMock: vi.fn() }))
-vi.mock('convex/react', () => ({
-  useQuery: () => useQueryMock(),
-  useMutation: () => vi.fn(),
-}))
+// Lobby is presentational (Room owns the query), so we pass state directly.
+// Only the mutation hooks need mocking (see PLAN §2.5 — off the network).
+vi.mock('convex/react', () => ({ useMutation: () => vi.fn() }))
+
+const { getHostTokenMock } = vi.hoisted(() => ({ getHostTokenMock: vi.fn() }))
 vi.mock('@/lib/identity', () => ({
   getUserId: () => 'me',
-  getHostToken: () => null,
+  getHostToken: () => getHostTokenMock(),
 }))
 
-function renderLobby() {
+// Option ids are a branded Convex type; cast string fixtures deliberately.
+const oid = (s: string) => s as PollState['options'][number]['id']
+
+function baseState(overrides: Partial<PollState> = {}): PollState {
+  return {
+    poll: {
+      code: 'WXYZ',
+      title: 'Dinner',
+      phase: 'lobby',
+      allowUserOptions: true,
+      createdAt: 0,
+    },
+    ballotCount: 0,
+    users: [{ userId: 'me', name: 'Mo', isHost: false, joinedAt: 1 }],
+    options: [],
+    ...overrides,
+  }
+}
+
+function renderLobby(state: PollState) {
   return render(
     <MemoryRouter initialEntries={['/room/WXYZ']}>
-      <Routes>
-        <Route path="/room/:code" element={<Lobby />} />
-      </Routes>
+      <Lobby state={state} code="WXYZ" />
     </MemoryRouter>,
   )
 }
 
 describe('Lobby', () => {
-  it('shows a loading state before the first result', () => {
-    useQueryMock.mockReturnValue(undefined)
-    renderLobby()
-    expect(screen.getByText(/loading room/i)).toBeInTheDocument()
-  })
-
-  it('shows room-not-found when the query returns null', () => {
-    useQueryMock.mockReturnValue(null)
-    renderLobby()
-    expect(
-      screen.getByRole('heading', { name: /room not found/i }),
-    ).toBeInTheDocument()
-  })
+  beforeEach(() => getHostTokenMock.mockReturnValue(null))
 
   it('lists users, tagging the host and the current device', () => {
-    useQueryMock.mockReturnValue({
-      poll: {
-        code: 'WXYZ',
-        title: 'Dinner',
-        phase: 'lobby',
-        allowUserOptions: true,
-        createdAt: 0,
-      },
-      users: [
-        { userId: 'host-1', name: 'Hana', isHost: true, joinedAt: 1 },
-        { userId: 'me', name: 'Mo', isHost: false, joinedAt: 2 },
-      ],
-      options: [],
-    })
-    renderLobby()
+    renderLobby(
+      baseState({
+        users: [
+          { userId: 'host-1', name: 'Hana', isHost: true, joinedAt: 1 },
+          { userId: 'me', name: 'Mo', isHost: false, joinedAt: 2 },
+        ],
+      }),
+    )
 
     expect(screen.getByText('WXYZ')).toBeInTheDocument()
     expect(screen.getByText(/2 people here/i)).toBeInTheDocument()
@@ -63,21 +60,14 @@ describe('Lobby', () => {
   })
 
   it('lists options and offers an add box when the poll allows it', () => {
-    useQueryMock.mockReturnValue({
-      poll: {
-        code: 'WXYZ',
-        title: 'Dinner',
-        phase: 'lobby',
-        allowUserOptions: true,
-        createdAt: 0,
-      },
-      users: [{ userId: 'me', name: 'Mo', isHost: false, joinedAt: 1 }],
-      options: [
-        { id: 'o1', text: 'Pizza', addedByUserId: 'me', createdAt: 1 },
-        { id: 'o2', text: 'Tacos', addedByUserId: 'me', createdAt: 2 },
-      ],
-    })
-    renderLobby()
+    renderLobby(
+      baseState({
+        options: [
+          { id: oid('o1'), text: 'Pizza', addedByUserId: 'me', createdAt: 1 },
+          { id: oid('o2'), text: 'Tacos', addedByUserId: 'me', createdAt: 2 },
+        ],
+      }),
+    )
 
     expect(screen.getByText('Pizza')).toBeInTheDocument()
     expect(screen.getByText('Tacos')).toBeInTheDocument()
@@ -86,19 +76,27 @@ describe('Lobby', () => {
   })
 
   it('hides the add box when guests may not add options', () => {
-    useQueryMock.mockReturnValue({
-      poll: {
-        code: 'WXYZ',
-        title: 'Dinner',
-        phase: 'lobby',
-        allowUserOptions: false,
-        createdAt: 0,
-      },
-      users: [{ userId: 'me', name: 'Mo', isHost: false, joinedAt: 1 }],
-      options: [],
-    })
-    renderLobby()
-
+    renderLobby(baseState({ poll: { ...baseState().poll, allowUserOptions: false } }))
     expect(screen.queryByLabelText(/add an option/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the host a Start voting control, guests a waiting message', () => {
+    getHostTokenMock.mockReturnValue('host-token')
+    renderLobby(
+      baseState({
+        options: [
+          { id: oid('o1'), text: 'Pizza', addedByUserId: 'me', createdAt: 1 },
+        ],
+      }),
+    )
+    expect(
+      screen.getByRole('button', { name: /start voting/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('disables Start voting until there is at least one option', () => {
+    getHostTokenMock.mockReturnValue('host-token')
+    renderLobby(baseState({ options: [] }))
+    expect(screen.getByRole('button', { name: /start voting/i })).toBeDisabled()
   })
 })

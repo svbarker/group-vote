@@ -22,9 +22,14 @@ screens for small touch surfaces first, then scale up.
 - **✅ M3 COMPLETE (2026-07-26).** BE-3.1–3.2, FE-3.1–3.2 done and committed. 🟢 **M3 checkpoint met**
   — verified live: options added from the lobby appear in real time; seed options flow from Create.
   See the M3 "as built" notes below.
-- **Next step → M4 (voting / drag-to-rank).** Start with **BE-4.1**: `ballots` schema + `by_poll_user`
-  upsert index. Then BE-4.2 (`advancePhase` lobby → voting, host-gated), BE-4.3 (`submitBallot`),
-  FE-4.1–4.3 (phase-driven routing + dnd-kit ranking surface with the "hard no" cutoff).
+- **✅ M4 COMPLETE (2026-07-26).** BE-4.1–4.3, FE-4.1–4.3, QA-4.1 done. 🟢 **M4 checkpoint met** —
+  verified live: host started voting, the room switched to the ranking surface in lockstep, an option
+  was rejected below the cutoff via the non-drag controls, the ballot submitted, and "N of M voted"
+  updated live. Drag-and-drop built to WCAG standards (see the M4 "as built" notes below).
+- **Next step → M5 (scoring & reveal).** Start with **BE-5.1**: the pure `score()` (Borda + cutoff),
+  unit-tested. Then BE-5.2 (`advancePhase` voting → revealed + `getResults`), FE-5.1–5.2 (reveal
+  screen + host "new round" control). Note: `advancePhase` already has a transition map — M5 just adds
+  the `voting → revealed` entry.
 - **Before writing tests in M2, read "Testing stack (decided)" in §2.5** — it settles how to mock
   Convex in each layer.
 - **Read first:** this file (design + milestones) and `group-vote/CLAUDE.md` (conventions:
@@ -340,14 +345,48 @@ Goal: collaborative option gathering.
 
 ### M4 — Voting (interaction core)
 Goal: the signature drag-to-rank experience with the "hard no" cutoff.
-- **BE-4.1** `ballots` schema + `by_poll_user` upsert index.
-- **BE-4.2** `advancePhase` (lobby → voting), host-gated.
-- **BE-4.3** `submitBallot` upsert (re-voting), phase-gated; add "N of M voted" to state.
-- **FE-4.1** Phase-driven routing so all clients switch to Voting when the host starts.
-- **FE-4.2** dnd-kit ranking list with a draggable **cutoff line**; mobile touch-tuned.
-- **FE-4.3** Submit + live "N of M voted"; re-order and re-submit until close.
-- **QA-4.1** `convex-test` for `submitBallot` (phase gate, upsert overwrites prior ballot); component test for the ranking + cutoff interaction.
-- 🟢 **Checkpoint:** whole room ranks options and submits; vote progress updates live. (Winner not computed yet.)
+
+**Setup notes / deviations (as built):**
+- **Ballot integrity is server-authoritative** (`convex/polls.ts` `submitBallot`): voting-phase gated,
+  membership re-checked, and every option id in `ranking`/`rejected` is re-validated against the poll
+  with no duplicates across the two lists — a client can't inject foreign ids or double-count. Upserts
+  on `by_poll_user`, so revising a ballot overwrites rather than stacking. `getPollState` gained
+  `ballotCount` for the live "N of M voted" tally (M = `users.length`).
+- **`advancePhase` uses a one-way transition map** (`{ lobby: 'voting' }`); host-gated by the secret
+  `hostToken`, never a client `isHost` flag. `voting → revealed` is intentionally absent until M5.
+- **Routing refactor (FE-4.1):** `/room/:code` now renders `Room`, which owns the `getPollState`
+  subscription + loading/not-found and switches on `phase` to `Lobby` / `Voting` / (M5) reveal. Lobby
+  and Voting are presentational, taking a shared `PollState` prop (`NonNullable<FunctionReturnType<…>>`
+  so the type can't drift). Host "Start voting" lives in the lobby, disabled until ≥1 option exists.
+- **Accessible drag-and-drop (dnd-kit).** One unified sortable list with the cutoff as a draggable
+  sentinel row; above = ranked, below = "hard no" (scores zero). WCAG coverage:
+  - **2.1.1 Keyboard** — `KeyboardSensor` + `sortableKeyboardCoordinates`; handles are real buttons.
+  - **2.5.7 Dragging Movements** — every row has non-drag **Move up / Move down** and a
+    **Reject/Restore** (cross-cutoff) button, so nothing *requires* a drag. This is the key criterion.
+  - **4.1.3 Status Messages** — custom dnd-kit `announcements` voice drag pickup/over/drop; a separate
+    polite `role="status"` region voices the button-driven moves.
+  - **2.3.3 Reduced motion** — drag transforms disabled under `prefers-reduced-motion`.
+  - **4.1.2 Name/Role/Value** — every control names its option; the cutoff is a labeled, described
+    boundary; `aria-pressed` on the reject toggle.
+  - Touch: drag activates from the handle only (press-hold via `TouchSensor` delay) so the list still
+    scrolls; `MouseSensor` distance threshold keeps button clicks from starting a drag.
+- **Re-voting** initializes from a local working order (all ranked, cutoff at bottom) seeded once;
+  options are frozen during voting, so it never re-syncs from the server. Restoring a prior ballot on
+  reload is deferred (would need `getPollState` to return the caller's ballot) — a possible M6 polish.
+- **Test infra:** added a `window.matchMedia` stub to `src/test/setup.ts` (jsdom lacks it). Component
+  tests drive the ranking through the non-drag controls (dnd gestures aren't exercised in jsdom).
+- **Dev data:** verification left a test poll (`JVAP`) in the Convex dev deployment. Harmless; wipe via
+  the dashboard if desired (still no reap mutation — §11 stretch).
+
+- ✅ **BE-4.1** `ballots` schema + `by_poll` + `by_poll_user` (upsert) indexes.
+- ✅ **BE-4.2** `advancePhase` (lobby → voting), host-gated.
+- ✅ **BE-4.3** `submitBallot` upsert (re-voting), phase-gated; `ballotCount` added to state.
+- ✅ **FE-4.1** Phase-driven routing (`Room` dispatcher) so all clients switch to Voting in lockstep.
+- ✅ **FE-4.2** dnd-kit ranking list with a draggable **cutoff line**; mobile touch-tuned; WCAG-conformant.
+- ✅ **FE-4.3** Submit + live "N of M voted"; re-order and re-submit until close.
+- ✅ **QA-4.1** `convex-test` for `advancePhase` + `submitBallot` (phase gate, upsert overwrite, id
+  validation); `Voting`/`Room`/`Lobby` component tests for the ranking + cutoff interaction and routing.
+- ✅ 🟢 **Checkpoint MET:** whole room ranks options and submits; vote progress updates live. (Winner not computed yet — M5.)
 
 ### M5 — Scoring & reveal (MVP complete)
 Goal: close the loop — a real winner, revealed to everyone.

@@ -175,6 +175,115 @@ export const addOption = mutation({
   },
 })
 
+// Phases advance in one direction (PLAN §1). M4 opens voting; the voting →
+// revealed transition lands in M5 alongside scoring, so it's intentionally absent.
+const NEXT_PHASE: Partial<Record<'lobby' | 'voting' | 'revealed', 'voting'>> = {
+  lobby: 'voting',
+}
+
+// Host-only phase advance. The client proves it's the host by presenting the
+// secret `hostToken` minted at createPoll — never trust an `isHost` flag from the
+// client (CLAUDE.md). Re-checks the token and current phase on the server.
+export const advancePhase = mutation({
+  args: {
+    code: v.string(),
+    hostToken: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const code = args.code.trim().toUpperCase()
+    const poll = await ctx.db
+      .query('polls')
+      .withIndex('by_code', (q) => q.eq('code', code))
+      .first()
+    if (!poll) throw new Error('No room found for that code.')
+    if (poll.hostToken !== args.hostToken) {
+      throw new Error('Only the host can advance the poll.')
+    }
+
+    const next = NEXT_PHASE[poll.phase]
+    if (!next) {
+      throw new Error(`Cannot advance from the ${poll.phase} phase.`)
+    }
+
+    await ctx.db.patch(poll._id, { phase: next })
+    return { phase: next }
+  },
+})
+
+// Submit (or re-submit) a ballot. Allowed only while voting is open; upserts on
+// `by_poll_user` so a user revising their ranking overwrites their prior ballot
+// rather than stacking duplicates. Every option id is re-validated against this
+// poll and the two lists must be disjoint — the client can't inject foreign ids
+// or double-count an option (CLAUDE.md: never trust client data for authority).
+export const submitBallot = mutation({
+  args: {
+    code: v.string(),
+    userId: v.string(),
+    ranking: v.array(v.id('options')),
+    rejected: v.array(v.id('options')),
+  },
+  handler: async (ctx, args) => {
+    const code = args.code.trim().toUpperCase()
+    const poll = await ctx.db
+      .query('polls')
+      .withIndex('by_code', (q) => q.eq('code', code))
+      .first()
+    if (!poll) throw new Error('No room found for that code.')
+    if (poll.phase !== 'voting') {
+      throw new Error('Voting is not open.')
+    }
+
+    const member = await ctx.db
+      .query('users')
+      .withIndex('by_poll', (q) => q.eq('pollId', poll._id))
+      .collect()
+      .then((users) => users.find((u) => u.userId === args.userId))
+    if (!member) throw new Error('Join the room before voting.')
+
+    const pollOptionIds = new Set(
+      (
+        await ctx.db
+          .query('options')
+          .withIndex('by_poll', (q) => q.eq('pollId', poll._id))
+          .collect()
+      ).map((o) => o._id),
+    )
+
+    const seen = new Set<string>()
+    for (const id of [...args.ranking, ...args.rejected]) {
+      if (!pollOptionIds.has(id)) {
+        throw new Error('Ballot references an option not in this poll.')
+      }
+      if (seen.has(id)) {
+        throw new Error('An option appears more than once on the ballot.')
+      }
+      seen.add(id)
+    }
+
+    const existing = await ctx.db
+      .query('ballots')
+      .withIndex('by_poll_user', (q) =>
+        q.eq('pollId', poll._id).eq('userId', args.userId),
+      )
+      .first()
+
+    const fields = {
+      ranking: args.ranking,
+      rejected: args.rejected,
+      submittedAt: Date.now(),
+    }
+    if (existing) {
+      await ctx.db.patch(existing._id, fields)
+    } else {
+      await ctx.db.insert('ballots', {
+        pollId: poll._id,
+        userId: args.userId,
+        ...fields,
+      })
+    }
+  },
+})
+
 // Reactive query driving the lobby: poll meta (minus the secret hostToken),
 // current phase, and the user list ordered by join time. Returns null for an
 // unknown code so the UI can show "room not found" rather than error out.
@@ -198,6 +307,11 @@ export const getPollState = query({
       .withIndex('by_poll', (q) => q.eq('pollId', poll._id))
       .collect()
 
+    const ballots = await ctx.db
+      .query('ballots')
+      .withIndex('by_poll', (q) => q.eq('pollId', poll._id))
+      .collect()
+
     return {
       poll: {
         code: poll.code,
@@ -206,6 +320,7 @@ export const getPollState = query({
         allowUserOptions: poll.allowUserOptions,
         createdAt: poll.createdAt,
       },
+      ballotCount: ballots.length, // "N of M voted" (M = users.length)
       users: users
         .sort((a, b) => a.joinedAt - b.joinedAt)
         .map((u) => ({

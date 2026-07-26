@@ -132,6 +132,130 @@ describe('addOption', () => {
   })
 })
 
+describe('advancePhase', () => {
+  test('host opens voting (lobby → voting)', async () => {
+    const t = setup()
+    const { code, hostToken } = await hostAPoll(t)
+
+    const { phase } = await t.mutation(api.polls.advancePhase, {
+      code,
+      hostToken,
+    })
+    expect(phase).toBe('voting')
+
+    const state = await t.query(api.polls.getPollState, { code })
+    expect(state?.poll.phase).toBe('voting')
+  })
+
+  test('rejects a wrong host token', async () => {
+    const t = setup()
+    const { code } = await hostAPoll(t)
+    await expect(
+      t.mutation(api.polls.advancePhase, { code, hostToken: 'not-the-token' }),
+    ).rejects.toThrow(/only the host/i)
+  })
+
+  test('will not advance past voting yet (revealed is M5)', async () => {
+    const t = setup()
+    const { code, hostToken } = await hostAPoll(t)
+    await t.mutation(api.polls.advancePhase, { code, hostToken })
+    await expect(
+      t.mutation(api.polls.advancePhase, { code, hostToken }),
+    ).rejects.toThrow(/cannot advance from the voting phase/i)
+  })
+})
+
+describe('submitBallot', () => {
+  // Open a poll with two seed options, advance to voting, and return the option ids.
+  async function votingPoll(t: ReturnType<typeof setup>) {
+    const { code, hostToken } = await hostAPoll(t, {
+      seedOptions: ['Pizza', 'Tacos'],
+    })
+    await t.mutation(api.polls.advancePhase, { code, hostToken })
+    const state = await t.query(api.polls.getPollState, { code })
+    const [pizza, tacos] = state!.options.map((o) => o.id)
+    return { code, pizza, tacos }
+  }
+
+  test('records a ballot and counts toward the vote tally', async () => {
+    const t = setup()
+    const { code, pizza, tacos } = await votingPoll(t)
+
+    await t.mutation(api.polls.submitBallot, {
+      code,
+      userId: 'user-host',
+      ranking: [pizza],
+      rejected: [tacos],
+    })
+
+    const state = await t.query(api.polls.getPollState, { code })
+    expect(state?.ballotCount).toBe(1)
+  })
+
+  test('upsert: re-submitting overwrites the prior ballot', async () => {
+    const t = setup()
+    const { code, pizza, tacos } = await votingPoll(t)
+
+    await t.mutation(api.polls.submitBallot, {
+      code,
+      userId: 'user-host',
+      ranking: [pizza],
+      rejected: [tacos],
+    })
+    await t.mutation(api.polls.submitBallot, {
+      code,
+      userId: 'user-host',
+      ranking: [tacos, pizza],
+      rejected: [],
+    })
+
+    const state = await t.query(api.polls.getPollState, { code })
+    expect(state?.ballotCount).toBe(1) // one ballot, not two
+  })
+
+  test('rejects a ballot before voting is open', async () => {
+    const t = setup()
+    const { code } = await hostAPoll(t, { seedOptions: ['Pizza'] })
+    const state = await t.query(api.polls.getPollState, { code })
+    const pizza = state!.options[0].id
+    await expect(
+      t.mutation(api.polls.submitBallot, {
+        code,
+        userId: 'user-host',
+        ranking: [pizza],
+        rejected: [],
+      }),
+    ).rejects.toThrow(/voting is not open/i)
+  })
+
+  test('rejects an option that appears twice', async () => {
+    const t = setup()
+    const { code, pizza } = await votingPoll(t)
+    await expect(
+      t.mutation(api.polls.submitBallot, {
+        code,
+        userId: 'user-host',
+        ranking: [pizza],
+        rejected: [pizza],
+      }),
+    ).rejects.toThrow(/more than once/i)
+  })
+
+  test('rejects an option id from another poll', async () => {
+    const t = setup()
+    const { code } = await votingPoll(t)
+    const other = await votingPoll(t)
+    await expect(
+      t.mutation(api.polls.submitBallot, {
+        code,
+        userId: 'user-host',
+        ranking: [other.pizza],
+        rejected: [],
+      }),
+    ).rejects.toThrow(/not in this poll/i)
+  })
+})
+
 describe('joinPoll', () => {
   test('rejects an unknown code', async () => {
     const t = setup()
