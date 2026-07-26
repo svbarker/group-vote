@@ -6,10 +6,22 @@ import { generateRoomCode } from './roomCode'
 // before giving up so a clash never surfaces to the user.
 const MAX_CODE_ATTEMPTS = 5
 
+// Server-side cap so a client can't stash unbounded text on the poll. The Create
+// screen enforces a matching maxLength; this is the authoritative guard.
+const MAX_OPTION_LENGTH = 100
+
 function requireNonEmpty(value: string, label: string): string {
   const trimmed = value.trim()
   if (!trimmed) throw new Error(`${label} is required.`)
   return trimmed
+}
+
+// Trim + length-cap an option's text. Returns null for blank input so callers
+// can silently skip empty seed entries rather than error on them.
+function normalizeOptionText(raw: string): string | null {
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  return trimmed.slice(0, MAX_OPTION_LENGTH)
 }
 
 // Host creates a poll and is added as the first (host) user. `userId` is the
@@ -21,10 +33,14 @@ export const createPoll = mutation({
     allowUserOptions: v.boolean(),
     name: v.string(),
     userId: v.string(),
+    seedOptions: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const title = requireNonEmpty(args.title, 'Poll title')
     const name = requireNonEmpty(args.name, 'Display name')
+    const seedTexts = (args.seedOptions ?? [])
+      .map(normalizeOptionText)
+      .filter((t): t is string => t !== null)
 
     let code: string | null = null
     for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
@@ -62,6 +78,15 @@ export const createPoll = mutation({
       isHost: true,
       joinedAt: now,
     })
+
+    for (const text of seedTexts) {
+      await ctx.db.insert('options', {
+        pollId,
+        text,
+        addedByUserId: args.userId,
+        createdAt: now,
+      })
+    }
 
     return { code, hostToken, userId: args.userId }
   },
@@ -107,6 +132,49 @@ export const joinPoll = mutation({
   },
 })
 
+// Suggest an option during the lobby/suggestion phase. Gated on the server, per
+// CLAUDE.md: options can only be added while the poll is in `lobby`, and only the
+// host may add when `allowUserOptions` is off. Membership is re-checked from the
+// DB rather than trusted from the client.
+export const addOption = mutation({
+  args: {
+    code: v.string(),
+    text: v.string(),
+    userId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const text = normalizeOptionText(args.text)
+    if (!text) throw new Error('Option text is required.')
+
+    const code = args.code.trim().toUpperCase()
+    const poll = await ctx.db
+      .query('polls')
+      .withIndex('by_code', (q) => q.eq('code', code))
+      .first()
+    if (!poll) throw new Error('No room found for that code.')
+    if (poll.phase !== 'lobby') {
+      throw new Error('Options can only be added before voting starts.')
+    }
+
+    const members = await ctx.db
+      .query('users')
+      .withIndex('by_poll', (q) => q.eq('pollId', poll._id))
+      .collect()
+    const member = members.find((u) => u.userId === args.userId)
+    if (!member) throw new Error('Join the room before adding options.')
+    if (!poll.allowUserOptions && !member.isHost) {
+      throw new Error('The host has disabled adding options.')
+    }
+
+    await ctx.db.insert('options', {
+      pollId: poll._id,
+      text,
+      addedByUserId: args.userId,
+      createdAt: Date.now(),
+    })
+  },
+})
+
 // Reactive query driving the lobby: poll meta (minus the secret hostToken),
 // current phase, and the user list ordered by join time. Returns null for an
 // unknown code so the UI can show "room not found" rather than error out.
@@ -125,6 +193,11 @@ export const getPollState = query({
       .withIndex('by_poll', (q) => q.eq('pollId', poll._id))
       .collect()
 
+    const options = await ctx.db
+      .query('options')
+      .withIndex('by_poll', (q) => q.eq('pollId', poll._id))
+      .collect()
+
     return {
       poll: {
         code: poll.code,
@@ -140,6 +213,14 @@ export const getPollState = query({
           name: u.name,
           isHost: u.isHost,
           joinedAt: u.joinedAt,
+        })),
+      options: options
+        .sort((a, b) => a.createdAt - b.createdAt)
+        .map((o) => ({
+          id: o._id,
+          text: o.text,
+          addedByUserId: o.addedByUserId,
+          createdAt: o.createdAt,
         })),
     }
   },

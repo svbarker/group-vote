@@ -1,9 +1,10 @@
-import type { ReactNode } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery } from 'convex/react'
+import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { Badge } from '@/components/gv/badge'
 import { Button } from '@/components/gv/button'
+import { Input } from '@/components/gv/input'
 import { getHostToken, getUserId } from '@/lib/identity'
 
 function LobbyShell({ children }: { children: ReactNode }) {
@@ -18,8 +19,29 @@ export function Lobby() {
   const { code = '' } = useParams()
   const navigate = useNavigate()
   const state = useQuery(api.polls.getPollState, { code })
+  const addOption = useMutation(api.polls.addOption)
   const myUserId = getUserId()
   const isHost = getHostToken(code) !== null
+
+  const [draft, setDraft] = useState('')
+  const [addError, setAddError] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
+
+  async function handleAdd(e: FormEvent) {
+    e.preventDefault()
+    const text = draft.trim()
+    if (!text || adding) return
+    setAdding(true)
+    setAddError(null)
+    try {
+      await addOption({ code, text, userId: myUserId })
+      setDraft('')
+    } catch {
+      setAddError('Could not add that option — please try again.')
+    } finally {
+      setAdding(false)
+    }
+  }
 
   if (state === undefined) {
     return (
@@ -48,7 +70,8 @@ export function Lobby() {
     )
   }
 
-  const { poll, users } = state
+  const { poll, users, options } = state
+  const canAddOptions = poll.phase === 'lobby' && (poll.allowUserOptions || isHost)
 
   return (
     <LobbyShell>
@@ -84,6 +107,52 @@ export function Lobby() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium text-muted-foreground">
+          {options.length === 1 ? '1 option' : `${options.length} options`}
+        </h2>
+        {options.length > 0 ? (
+          <ul className="space-y-2">
+            {options.map((option) => (
+              <li
+                key={option.id}
+                className="rounded-lg border border-border px-3 py-2.5 font-medium"
+              >
+                {option.text}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No options yet
+            {canAddOptions ? ' — add the first one below.' : '.'}
+          </p>
+        )}
+
+        {canAddOptions && (
+          <form onSubmit={handleAdd} className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Input
+                aria-label="Add an option"
+                placeholder="Add an option…"
+                autoComplete="off"
+                maxLength={100}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+              />
+              <Button type="submit" disabled={!draft.trim() || adding}>
+                Add
+              </Button>
+            </div>
+            {addError && (
+              <p role="alert" className="text-sm text-destructive">
+                {addError}
+              </p>
+            )}
+          </form>
+        )}
       </section>
 
       {isHost ? (

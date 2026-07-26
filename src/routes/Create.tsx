@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from 'convex/react'
+import { X } from 'lucide-react'
 import { api } from '../../convex/_generated/api'
 import { Button } from '@/components/gv/button'
 import { Input } from '@/components/gv/input'
@@ -19,12 +20,21 @@ export function Create() {
 
   const [title, setTitle] = useState('')
   const [name, setName] = useState(getSavedName)
+  const [seedOptions, setSeedOptions] = useState<string[]>([])
   const [allowUserOptions, setAllowUserOptions] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const canCreate =
     title.trim().length > 0 && name.trim().length > 0 && !submitting
+
+  function updateSeed(index: number, value: string) {
+    setSeedOptions((prev) => prev.map((o, i) => (i === index ? value : o)))
+  }
+
+  function removeSeed(index: number) {
+    setSeedOptions((prev) => prev.filter((_, i) => i !== index))
+  }
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault()
@@ -37,6 +47,7 @@ export function Create() {
         allowUserOptions,
         name: name.trim(),
         userId: getUserId(),
+        seedOptions: seedOptions.map((o) => o.trim()).filter(Boolean),
       })
       saveHostToken(code, hostToken) // marks this device as the host of that room
       saveName(name)
@@ -79,6 +90,43 @@ export function Create() {
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Options to start with (optional)</Label>
+          {seedOptions.length > 0 && (
+            <ul className="space-y-2">
+              {seedOptions.map((option, index) => (
+                <li key={index} className="flex items-center gap-2">
+                  <Input
+                    aria-label={`Option ${index + 1}`}
+                    placeholder={`Option ${index + 1}`}
+                    autoComplete="off"
+                    maxLength={100}
+                    value={option}
+                    onChange={(e) => updateSeed(index, e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Remove option ${index + 1}`}
+                    onClick={() => removeSeed(index)}
+                  >
+                    <X className="size-4" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={() => setSeedOptions((prev) => [...prev, ''])}
+          >
+            Add an option
+          </Button>
         </div>
 
         <div className="flex items-center justify-between gap-4">

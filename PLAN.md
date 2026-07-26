@@ -19,10 +19,12 @@ screens for small touch surfaces first, then scale up.
   checkpoint met** — verified live against the Convex dev deployment: a host lobby updated from
   "1 person here" to "2 people here" with a second device's join pushed through reactively, **no
   reload**. See the M2 "as built" notes below for decisions/deviations.
-- **Next step → M3 (options / suggestion phase).** Start with **BE-3.1**: `options` schema + `by_poll`
-  index (the `allowUserOptions` flag already lives on the poll as of M2). Then BE-3.2 (`addOption`
-  mutation, phase + permission gated; extend `getPollState` with options), FE-3.1/3.2 (seed options +
-  add-option box in the lobby).
+- **✅ M3 COMPLETE (2026-07-26).** BE-3.1–3.2, FE-3.1–3.2 done and committed. 🟢 **M3 checkpoint met**
+  — verified live: options added from the lobby appear in real time; seed options flow from Create.
+  See the M3 "as built" notes below.
+- **Next step → M4 (voting / drag-to-rank).** Start with **BE-4.1**: `ballots` schema + `by_poll_user`
+  upsert index. Then BE-4.2 (`advancePhase` lobby → voting, host-gated), BE-4.3 (`submitBallot`),
+  FE-4.1–4.3 (phase-driven routing + dnd-kit ranking surface with the "hard no" cutoff).
 - **Before writing tests in M2, read "Testing stack (decided)" in §2.5** — it settles how to mock
   Convex in each layer.
 - **Read first:** this file (design + milestones) and `group-vote/CLAUDE.md` (conventions:
@@ -315,11 +317,26 @@ Goal: the "join a room and see each other" moment — the core real-time proof.
 
 ### M3 — Options / suggestion phase
 Goal: collaborative option gathering.
-- **BE-3.1** `options` schema + index; `allowUserOptions` flag on poll.
-- **BE-3.2** `addOption` mutation (phase + permission gated); extend `getPollState` with options.
-- **FE-3.1** Create screen: seed options + "let users add options" toggle.
-- **FE-3.2** Lobby: live option list + add-option box (shown/hidden per the flag).
-- 🟢 **Checkpoint:** a room fills with options in real time from multiple devices.
+
+**Setup notes / deviations (as built):**
+- **Server-authoritative gating** (`convex/polls.ts` `addOption`): options can only be added while
+  `phase === 'lobby'`; membership is re-checked from the DB (the client's `userId` must map to a
+  `users` row); when `allowUserOptions` is off, only the host (`isHost` on that row) may add. Text is
+  trimmed and capped at `MAX_OPTION_LENGTH` (100) server-side — the Create/Lobby `maxLength` is just UX.
+- **Seed options** ride along on `createPoll` as an optional `seedOptions: string[]`; blank entries are
+  dropped server-side via a shared `normalizeOptionText` helper (same trim/cap as `addOption`).
+- **`getPollState` now returns `options`** (sorted by `createdAt`, exposes `id/text/addedByUserId/
+  createdAt`) alongside `users`. Component tests that mock the query must include an `options` array.
+- **Frontend:** Create screen grows a dynamic seed-option list (add/remove rows, reusing `gv/input` +
+  `gv/button` with a Lucide `X` — no new primitive). Lobby shows a live option list + add-option box,
+  shown only when `canAddOptions` (lobby phase **and** allowUserOptions-or-host). `addOption` is a
+  fire-and-forget `useMutation`; failures surface a friendly inline `role="alert"`.
+
+- ✅ **BE-3.1** `options` schema + `by_poll` index; `allowUserOptions` flag on poll (already from M2).
+- ✅ **BE-3.2** `addOption` mutation (phase + permission gated); extend `getPollState` with options.
+- ✅ **FE-3.1** Create screen: seed options + "let users add options" toggle.
+- ✅ **FE-3.2** Lobby: live option list + add-option box (shown/hidden per the flag).
+- ✅ 🟢 **Checkpoint MET:** a room fills with options in real time; verified live in the lobby.
 
 ### M4 — Voting (interaction core)
 Goal: the signature drag-to-rank experience with the "hard no" cutoff.
