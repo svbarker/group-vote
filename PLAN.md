@@ -9,6 +9,21 @@ screens for small touch surfaces first, then scale up.
 
 ---
 
+## 0. Status & start here
+
+- **As of 2026-07-26:** planning complete. No code yet. Repo is an empty git repo at
+  `C:\Users\song_\code\group-vote`.
+- **Next step:** M1 / **FE-1.1** — scaffold Vite + React + TS + Tailwind + shadcn with **pnpm**.
+- **Read first:** this file (design + milestones) and `group-vote/CLAUDE.md` (conventions:
+  pnpm-only, shadcn wrapper design system, quality gate, Convex rules, scope discipline).
+- **Prerequisites before M1:**
+  - Node + **pnpm** (`corepack enable` or `npm i -g pnpm`).
+  - A **free Convex account** for the dev deployment — or plan to use `pnpm convex dev --local`.
+- **Working style (see personal + project CLAUDE.md):** bite-sized, reviewable steps; pause for
+  review at each sub-milestone; explain concepts in the unfamiliar areas (Convex, Vite, Vercel, pnpm).
+
+---
+
 ## 1. Concept & core loop
 
 1. **Host** creates a poll (title + optional seed options) → gets a 4-letter room code.
