@@ -11,11 +11,12 @@ screens for small touch surfaces first, then scale up.
 
 ## 0. Status & start here
 
-- **As of 2026-07-26:** M1 **frontend foundation done** — FE-1.1, QA-1.1, QA-1.2 complete
-  (Vite+React+TS scaffold, Tailwind v4 + shadcn, ESLint/Prettier/tsc, Vitest+RTL). `pnpm check`
-  and `pnpm build` are green; landing page renders. Not yet committed. See M1 checklist below.
-- **Next step:** M1 / **Chunk B (Convex)** — **BE-1.1** init Convex + trivial `ping` query.
-  First decision needed: cloud dev deployment (free Convex account) vs. local (`pnpm convex dev --local`).
+- **As of 2026-07-26:** M1 **frontend foundation + Convex backend done** — FE-1.1, QA-1.1, QA-1.2,
+  **BE-1.1, BE-1.2, QA-1.3** complete (Vite+React+TS scaffold, Tailwind v4 + shadcn,
+  ESLint/Prettier/tsc, Vitest+RTL; Convex initialized on a **cloud dev deployment** with a `ping`
+  query + `convex-test`). `pnpm check` is green. Not yet committed. See M1 checklist below.
+- **Next step:** M1 / **Chunk C** — **FE-1.2** wire `ConvexProvider` + render live `ping`, then
+  **QA-1.4** GitHub Actions CI. Note: `pnpm typecheck` does **not** yet cover `convex/` (see below).
 - **Read first:** this file (design + milestones) and `group-vote/CLAUDE.md` (conventions:
   pnpm-only, shadcn wrapper design system, quality gate, Convex rules, scope discipline).
 - **Prerequisites before M1:**
@@ -243,9 +244,9 @@ Convex dev deployment (`pnpm convex dev`, optionally `--local`).
 - ✅ **FE-1.1** Vite + React + TS project; Tailwind + shadcn configured.
 - ✅ **QA-1.1** ESLint (flat) + Prettier + `tsc --noEmit`; root scripts (`lint`/`format`/`typecheck`).
 - ✅ **QA-1.2** Vitest + RTL wired; a trivial passing test. Add `test`/`test:watch`/`check` scripts.
-- **BE-1.1** Init Convex; add a trivial `ping` query returning a timestamp.
-- **BE-1.2** Wire dev deployment; confirm `pnpm convex dev` regenerates types.
-- **QA-1.3** `convex-test` wired; a sample `ping` test passes.
+- ✅ **BE-1.1** Init Convex; add a trivial `ping` query returning a timestamp.
+- ✅ **BE-1.2** Wire dev deployment (cloud); confirmed `pnpm convex dev` regenerates types.
+- ✅ **QA-1.3** `convex-test` wired; sample `ping` test passes (edge-runtime env, per-file).
 - **FE-1.2** `ConvexProvider` wired; a component renders live `ping` data.
 - **QA-1.4** GitHub Actions running `check` (typecheck + lint + test) on push/PR.
   **Public repo** (unlimited free Actions minutes + doubles as portfolio); `runs-on: ubuntu-latest` only; cache deps via `setup-node`; trigger on PRs + pushes to `main`.
