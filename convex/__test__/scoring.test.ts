@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { score, type Ballot } from './scoring'
+import { score, type Ballot } from '../scoring'
 
 // Options are always passed in createdAt order (that's what getResults does),
 // so tie-breaks fall through to this order last.

@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import App from './App'
+import App from '../App'
 
 // Home calls useMutation; stub convex/react so the test needs no ConvexProvider
 // and stays focused on route rendering.

@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { Voting } from './Voting'
-import type { PollState } from './Room'
+import { Voting } from '../Voting'
+import type { PollState } from '../Room'
 
 // Capture the mutations. Voting uses two (submitBallot + advancePhase); the same
 // spy backs both — tests assert on the call payload, which disambiguates.

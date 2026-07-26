@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { Lobby } from './Lobby'
-import type { PollState } from './Room'
+import { Lobby } from '../Lobby'
+import type { PollState } from '../Room'
 
 // Lobby is presentational (Room owns the query), so we pass state directly.
 // Only the mutation hooks need mocking (see PLAN §2.5 — off the network).

@@ -4,10 +4,10 @@
 // opts in; component tests keep the default jsdom environment.
 import { convexTest } from 'convex-test'
 import { expect, test } from 'vitest'
-import { api } from './_generated/api'
+import { api } from '../_generated/api'
 
 // convex-test loads the backend functions via Vite's import.meta.glob.
-const modules = import.meta.glob('./**/*.*s')
+const modules = import.meta.glob('../**/*.*s')
 
 test('ping returns ok with a server timestamp', async () => {
   const t = convexTest(undefined, modules)

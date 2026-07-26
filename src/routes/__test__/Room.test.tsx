@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { Room } from './Room'
+import { Room } from '../Room'
 
 // Room owns the reactive query and the phase switch; mock the hook to drive each
 // state deterministically (PLAN §2.5). Child screens have their own tests.

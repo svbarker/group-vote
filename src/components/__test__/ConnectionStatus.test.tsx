@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { ConnectionStatus } from './ConnectionStatus'
+import { ConnectionStatus } from '../ConnectionStatus'
 
 // Mock the Convex hook so the component test never opens a websocket; hoisted so
 // the mock factory can reference it despite vi.mock being lifted to the top.

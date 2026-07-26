@@ -1,11 +1,11 @@
 // @vitest-environment edge-runtime
 import { convexTest } from 'convex-test'
 import { describe, expect, test } from 'vitest'
-import { api } from './_generated/api'
-import schema from './schema'
-import { ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from './roomCode'
+import { api } from '../_generated/api'
+import schema from '../schema'
+import { ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from '../roomCode'
 
-const modules = import.meta.glob('./**/*.*s')
+const modules = import.meta.glob('../**/*.*s')
 
 function setup() {
   return convexTest(schema, modules)

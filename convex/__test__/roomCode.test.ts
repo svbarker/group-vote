@@ -3,7 +3,7 @@ import {
   ROOM_CODE_ALPHABET,
   ROOM_CODE_LENGTH,
   generateRoomCode,
-} from './roomCode'
+} from '../roomCode'
 
 describe('generateRoomCode', () => {
   test('produces a code of the right length from the alphabet', () => {

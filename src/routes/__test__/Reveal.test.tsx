@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { Reveal } from './Reveal'
-import type { PollState } from './Room'
+import { Reveal } from '../Reveal'
+import type { PollState } from '../Room'
 
 // Mock the reactive results query; each test sets its return value.
 const { useQueryMock, getHostTokenMock } = vi.hoisted(() => ({
