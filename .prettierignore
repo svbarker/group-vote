@@ -1,0 +1,7 @@
+dist
+coverage
+pnpm-lock.yaml
+convex/_generated
+
+# Authored docs — keep hand-formatting (tables, wrapping)
+*.md
