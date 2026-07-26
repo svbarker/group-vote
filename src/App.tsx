@@ -1,21 +1,15 @@
-import { Button } from '@/components/gv/button'
-import { ConnectionStatus } from '@/components/ConnectionStatus'
+import { Route, Routes } from 'react-router-dom'
+import { Home } from '@/routes/Home'
+import { Create } from '@/routes/Create'
+import { Lobby } from '@/routes/Lobby'
 
 function App() {
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center gap-6 p-6 text-center">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">Group Vote</h1>
-        <p className="text-muted-foreground">
-          Real-time, no-login group ranking.
-        </p>
-      </div>
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Button>Create a poll</Button>
-        <Button variant="outline">Join with a code</Button>
-      </div>
-      <ConnectionStatus />
-    </main>
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/create" element={<Create />} />
+      <Route path="/room/:code" element={<Lobby />} />
+    </Routes>
   )
 }
 
