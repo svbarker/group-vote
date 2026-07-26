@@ -11,14 +11,14 @@ screens for small touch surfaces first, then scale up.
 
 ## 0. Status & start here
 
-- **As of 2026-07-26:** M1 **full reactive slice proven** — FE-1.1, QA-1.1, QA-1.2, BE-1.1, BE-1.2,
-  QA-1.3, **FE-1.2** complete (Vite+React+TS, Tailwind v4 + shadcn, ESLint/Prettier/tsc, Vitest+RTL;
-  Convex on a **cloud dev deployment** with a `ping` query + `convex-test`; `ConvexProvider` wired and
-  the landing page renders live `ping` server time). `pnpm check` green; live round-trip verified in
-  the browser. BE chunk committed; FE-1.2 not yet committed. See M1 checklist below.
-- **Next step:** M1 / **QA-1.4** — GitHub Actions CI running `check` on push/PR. Fold in `convex/`
-  typecheck coverage here (add a `typecheck:convex` step) — `pnpm typecheck` does not yet cover it.
-  This is the **last M1 task**; then the 🟢 M1 checkpoint is met.
+- **As of 2026-07-26:** M1 **complete pending first CI run** — FE-1.1, QA-1.1, QA-1.2, BE-1.1,
+  BE-1.2, QA-1.3, FE-1.2, **QA-1.4** all built (Vite+React+TS, Tailwind v4 + shadcn,
+  ESLint/Prettier/tsc, Vitest+RTL; Convex on a **cloud dev deployment** with a `ping` query +
+  `convex-test`; `ConvexProvider` wired, landing page renders live `ping`; GitHub Actions CI running
+  the full `check`). `pnpm check` green; live round-trip verified in the browser. FE-1.2 committed;
+  QA-1.4 (CI workflow + `check` update) not yet committed/pushed.
+- **Next step:** commit + **push QA-1.4** and confirm the Actions run is green — that closes the
+  🟢 **M1 checkpoint**. Then start **M2** (rooms & real-time lobby): BE-2.1 `polls`/`users` schema.
 - **Read first:** this file (design + milestones) and `group-vote/CLAUDE.md` (conventions:
   pnpm-only, shadcn wrapper design system, quality gate, Convex rules, scope discipline).
 - **Prerequisites before M1:**
@@ -250,8 +250,11 @@ Convex dev deployment (`pnpm convex dev`, optionally `--local`).
 - ✅ **BE-1.2** Wire dev deployment (cloud); confirmed `pnpm convex dev` regenerates types.
 - ✅ **QA-1.3** `convex-test` wired; sample `ping` test passes (edge-runtime env, per-file).
 - ✅ **FE-1.2** `ConvexProvider` wired; `ConnectionStatus` renders live `ping` data.
-- **QA-1.4** GitHub Actions running `check` (typecheck + lint + test) on push/PR.
-  **Public repo** (unlimited free Actions minutes + doubles as portfolio); `runs-on: ubuntu-latest` only; cache deps via `setup-node`; trigger on PRs + pushes to `main`.
+- ✅ **QA-1.4** GitHub Actions (`.github/workflows/ci.yml`) runs `check` (app + **convex** typecheck
+  + lint + test) on push to `main` + all PRs. `runs-on: ubuntu-latest`; pnpm via `packageManager`
+  field; deps cached via `setup-node` (`cache: pnpm`). Convex typecheck folded into `check` through
+  a `typecheck:convex` script. Config verified locally (`pnpm check` green); **awaiting first CI
+  run — push to GitHub to confirm green**, which closes the M1 🟢 checkpoint.
 - 🟢 **Checkpoint:** `pnpm dev` + `pnpm convex dev` — local page shows a value coming live from Convex, green CI. Reactive path + quality gates proven. (No hosting yet — that's M7.)
 
 ### M2 — Rooms & real-time lobby
