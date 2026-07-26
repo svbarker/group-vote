@@ -11,9 +11,11 @@ screens for small touch surfaces first, then scale up.
 
 ## 0. Status & start here
 
-- **As of 2026-07-26:** planning complete. No code yet. Repo is an empty git repo at
-  `C:\Users\song_\code\group-vote`.
-- **Next step:** M1 / **FE-1.1** — scaffold Vite + React + TS + Tailwind + shadcn with **pnpm**.
+- **As of 2026-07-26:** M1 **frontend foundation done** — FE-1.1, QA-1.1, QA-1.2 complete
+  (Vite+React+TS scaffold, Tailwind v4 + shadcn, ESLint/Prettier/tsc, Vitest+RTL). `pnpm check`
+  and `pnpm build` are green; landing page renders. Not yet committed. See M1 checklist below.
+- **Next step:** M1 / **Chunk B (Convex)** — **BE-1.1** init Convex + trivial `ping` query.
+  First decision needed: cloud dev deployment (free Convex account) vs. local (`pnpm convex dev --local`).
 - **Read first:** this file (design + milestones) and `group-vote/CLAUDE.md` (conventions:
   pnpm-only, shadcn wrapper design system, quality gate, Convex rules, scope discipline).
 - **Prerequisites before M1:**
@@ -228,9 +230,19 @@ consume them. 🟢 marks a **showable checkpoint** — a state you could demo or
 Goal: prove the full stack talks end to end **locally**, behind quality gates, before any features.
 Full production hosting is deferred to M7 — everything M1–M6 runs on the Vite dev server +
 Convex dev deployment (`pnpm convex dev`, optionally `--local`).
-- **FE-1.1** Vite + React + TS project; Tailwind + shadcn configured.
-- **QA-1.1** ESLint (flat) + Prettier + `tsc --noEmit`; root scripts (`lint`/`format`/`typecheck`).
-- **QA-1.2** Vitest + RTL wired; a trivial passing test. Add `test`/`test:watch`/`check` scripts.
+
+**Setup notes / deviations (as built):**
+- Versions: Vite 8, React 19, TS 6, Tailwind **v4** (CSS-first via `@tailwindcss/vite`, no
+  `tailwind.config`), shadcn **Nova** preset (Radix primitives + Lucide + Geist font).
+- Swapped the Vite template's default **oxlint → ESLint** flat config (per §2.5).
+- Path alias `@/* → src/*` (tsconfig + Vite). `strict: true` enabled.
+- Design system: `src/components/gv/*` wrappers wrap `src/components/ui/*` (vendored shadcn);
+  **app code imports `gv/` only, never `ui/` directly.** Wrap primitives lazily, as screens need them.
+- Scripts: `dev build typecheck lint format format:check test test:watch check` (`check` = quality gate).
+
+- ✅ **FE-1.1** Vite + React + TS project; Tailwind + shadcn configured.
+- ✅ **QA-1.1** ESLint (flat) + Prettier + `tsc --noEmit`; root scripts (`lint`/`format`/`typecheck`).
+- ✅ **QA-1.2** Vitest + RTL wired; a trivial passing test. Add `test`/`test:watch`/`check` scripts.
 - **BE-1.1** Init Convex; add a trivial `ping` query returning a timestamp.
 - **BE-1.2** Wire dev deployment; confirm `pnpm convex dev` regenerates types.
 - **QA-1.3** `convex-test` wired; a sample `ping` test passes.
