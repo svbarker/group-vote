@@ -94,7 +94,11 @@ typecheck + lint + test together (what CI calls).
   `vi.mock('convex/react')` + stub `useQuery`/`useMutation` (see `src/components/ConnectionStatus.test.tsx`).
   No dedicated library for this — the vitest module-mock is the idiomatic pattern; keeps component
   tests off the network and deterministic.
-- **Full reactive path** (two clients, live updates) → **Playwright E2E**, deferred to M6/M7.
+- **Full reactive path** (two clients, live updates) → **Cypress E2E**, deferred to M6/M7. Caveat:
+  Cypress drives a single browser tab, so the "two independent clients" scenario isn't native. Plan to
+  drive the _primary_ client in Cypress and the _second_ client via the Convex API (`pnpm convex run`
+  / `cy.exec` or a `cy.task`), then assert the live update lands in the Cypress browser — this mirrors
+  how M2 was verified manually and plays to Cypress's strengths.
 - **Why not MSW:** Convex uses a **WebSocket sync protocol**, not REST — nothing for MSW to
   intercept without reimplementing that protocol. MSW would only matter for external HTTP APIs, which
   this app doesn't have. And `convex-test` can't drive a React `useQuery` (it's server-side), so it
@@ -105,7 +109,7 @@ typecheck + lint + test together (what CI calls).
   cutoff at top/bottom, ties, single ballot, all-rejected).
 - **Convex functions** — happy path + guards (wrong phase, non-host advancing, bad code).
 - **Components** — the ranking interaction and phase-driven routing; skip trivial presentational bits.
-- **(Stretch)** Playwright E2E for the multi-client happy path — powerful for a real-time app,
+- **(Stretch)** Cypress E2E for the multi-client happy path — powerful for a real-time app,
   but heavier; deferred to M6/M7.
 
 ---
