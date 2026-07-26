@@ -1,4 +1,5 @@
 import { Button } from '@/components/gv/button'
+import { ConnectionStatus } from '@/components/ConnectionStatus'
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
         <Button>Create a poll</Button>
         <Button variant="outline">Join with a code</Button>
       </div>
+      <ConnectionStatus />
     </main>
   )
 }
