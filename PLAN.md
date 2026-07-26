@@ -11,14 +11,16 @@ screens for small touch surfaces first, then scale up.
 
 ## 0. Status & start here
 
-- **As of 2026-07-26:** M1 **complete pending first CI run** — FE-1.1, QA-1.1, QA-1.2, BE-1.1,
-  BE-1.2, QA-1.3, FE-1.2, **QA-1.4** all built (Vite+React+TS, Tailwind v4 + shadcn,
-  ESLint/Prettier/tsc, Vitest+RTL; Convex on a **cloud dev deployment** with a `ping` query +
-  `convex-test`; `ConvexProvider` wired, landing page renders live `ping`; GitHub Actions CI running
-  the full `check`). `pnpm check` green; live round-trip verified in the browser. FE-1.2 committed;
-  QA-1.4 (CI workflow + `check` update) not yet committed/pushed.
-- **Next step:** commit + **push QA-1.4** and confirm the Actions run is green — that closes the
-  🟢 **M1 checkpoint**. Then start **M2** (rooms & real-time lobby): BE-2.1 `polls`/`users` schema.
+- **✅ M1 COMPLETE (2026-07-26).** All of FE-1.1, QA-1.1, QA-1.2, BE-1.1, BE-1.2, QA-1.3, FE-1.2,
+  QA-1.4 done and committed; **GitHub Actions CI confirmed green**. 🟢 **M1 checkpoint met** — full
+  reactive slice (landing page renders live `ping` from a Convex cloud dev deployment) behind quality
+  gates (app + convex typecheck, lint, Vitest + convex-test), CI on every PR + push to `main`.
+- **Next step → M2 (rooms & real-time lobby).** Start with **BE-2.1**: `polls` + `users` schema
+  (`convex/schema.ts`) with indexes `by_code` / `by_poll` (see §4). Then BE-2.2 (`createPoll` w/
+  room-code gen + collision retry, `joinPoll`), BE-2.3 (`getPollState`), QA-2.1 tests. M2 is the
+  first showable "it's real" demo — real-time rooms across two devices.
+- **Before writing tests in M2, read "Testing stack (decided)" in §2.5** — it settles how to mock
+  Convex in each layer.
 - **Read first:** this file (design + milestones) and `group-vote/CLAUDE.md` (conventions:
   pnpm-only, shadcn wrapper design system, quality gate, Convex rules, scope discipline).
 - **Prerequisites before M1:**
@@ -79,6 +81,20 @@ Set up in M1 so every feature ships behind the same gates.
 
 **Root scripts:** `typecheck`, `lint`, `format`, `test`, `test:watch`, and a `check` that runs
 typecheck + lint + test together (what CI calls).
+
+**Testing stack (decided):** three layers, each with its own tool — don't reach for MSW.
+- **Backend functions** (mutations/queries, `score()`, guards) → **`convex-test`**: runs the real
+  function code against an in-memory Convex (real DB semantics, no network). This is where the real
+  value is. Env: `// @vitest-environment edge-runtime` per file (mirrors Convex's V8 isolate).
+- **Component render logic** (loading vs. data states, phase routing) → **mock the hook**:
+  `vi.mock('convex/react')` + stub `useQuery`/`useMutation` (see `src/components/ConnectionStatus.test.tsx`).
+  No dedicated library for this — the vitest module-mock is the idiomatic pattern; keeps component
+  tests off the network and deterministic.
+- **Full reactive path** (two clients, live updates) → **Playwright E2E**, deferred to M6/M7.
+- **Why not MSW:** Convex uses a **WebSocket sync protocol**, not REST — nothing for MSW to
+  intercept without reimplementing that protocol. MSW would only matter for external HTTP APIs, which
+  this app doesn't have. And `convex-test` can't drive a React `useQuery` (it's server-side), so it
+  can't replace the component-layer hook mock.
 
 **Testing focus (not 100% coverage):**
 - **Pure logic** — `score()` and room-code generation get thorough unit tests (edge cases:
@@ -253,9 +269,8 @@ Convex dev deployment (`pnpm convex dev`, optionally `--local`).
 - ✅ **QA-1.4** GitHub Actions (`.github/workflows/ci.yml`) runs `check` (app + **convex** typecheck
   + lint + test) on push to `main` + all PRs. `runs-on: ubuntu-latest`; pnpm via `packageManager`
   field; deps cached via `setup-node` (`cache: pnpm`). Convex typecheck folded into `check` through
-  a `typecheck:convex` script. Config verified locally (`pnpm check` green); **awaiting first CI
-  run — push to GitHub to confirm green**, which closes the M1 🟢 checkpoint.
-- 🟢 **Checkpoint:** `pnpm dev` + `pnpm convex dev` — local page shows a value coming live from Convex, green CI. Reactive path + quality gates proven. (No hosting yet — that's M7.)
+  a `typecheck:convex` script. **CI run confirmed green (2026-07-26).**
+- ✅ 🟢 **Checkpoint MET:** `pnpm dev` shows a value coming live from Convex; CI green. Reactive path + quality gates proven. (No hosting yet — that's M7.)
 
 ### M2 — Rooms & real-time lobby
 Goal: the "join a room and see each other" moment — the core real-time proof.
