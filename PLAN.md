@@ -26,10 +26,12 @@ screens for small touch surfaces first, then scale up.
   verified live: host started voting, the room switched to the ranking surface in lockstep, an option
   was rejected below the cutoff via the non-drag controls, the ballot submitted, and "N of M voted"
   updated live. Drag-and-drop built to WCAG standards (see the M4 "as built" notes below).
-- **Next step → M5 (scoring & reveal).** Start with **BE-5.1**: the pure `score()` (Borda + cutoff),
-  unit-tested. Then BE-5.2 (`advancePhase` voting → revealed + `getResults`), FE-5.1–5.2 (reveal
-  screen + host "new round" control). Note: `advancePhase` already has a transition map — M5 just adds
-  the `voting → revealed` entry.
+- **✅ M5 COMPLETE (2026-07-26).** BE-5.1–5.2, FE-5.1–5.2 done. 🟢 **M5 checkpoint met — END-TO-END
+  MVP** — verified live: host created a room, options were gathered, the room ranked and submitted
+  ballots, the host closed voting, and every client landed on the reveal (winner spotlight + ranked
+  standings bar chart) in lockstep. See the M5 "as built" notes below.
+- **Next step → M6 (polish).** Guard rails (rejoin/reconnect, host-token edges, empty-ballot),
+  empty/error/loading states across screens, mobile layout + reveal animation, shareable room link.
 - **Before writing tests in M2, read "Testing stack (decided)" in §2.5** — it settles how to mock
   Convex in each layer.
 - **Read first:** this file (design + milestones) and `group-vote/CLAUDE.md` (conventions:
@@ -390,11 +392,47 @@ Goal: the signature drag-to-rank experience with the "hard no" cutoff.
 
 ### M5 — Scoring & reveal (MVP complete)
 Goal: close the loop — a real winner, revealed to everyone.
-- **BE-5.1** Pure `score(ballots, options, method)` — Borda + cutoff; unit-tested.
-- **BE-5.2** `advancePhase` (voting → revealed); `getResults` reactive query.
-- **FE-5.1** Reveal screen: winner spotlight + ranked results bar chart.
-- **FE-5.2** Host "new round / new poll" control.
-- 🟢 **Checkpoint: END-TO-END MVP.** Create → join → add options → rank → reveal winner, live for the room. This is the first version worth putting in the portfolio.
+
+**Setup notes / deviations (as built):**
+- **Scoring is a standalone pure module** (`convex/scoring.ts`), free of Convex/DB types so it's
+  trivially unit-testable and IRV-swappable behind the same `score(ballots, optionIds, method)`
+  signature. Borda + hard-no cutoff per §6: an above-line option at rank `i` earns `N-1-i`; rejected
+  or unranked options earn 0. Standings sort best-first; ties break on first-place votes, then on the
+  order of `optionIds` — callers pass options in `createdAt` order and the sort is **stable**, so a
+  full tie falls back to who was added first (no explicit createdAt field threaded through). The
+  function is defensive: ids not in the poll are ignored so a stray id can't corrupt the tally.
+- **`getResults` keys off `code`, not `pollId`** (§5 sketched `pollId`) — consistent with
+  `getPollState` and every other function in `convex/polls.ts`, and the client already holds the code.
+  It **returns `null` unless `phase === 'revealed'`**, so a client polling mid-vote can't peek at
+  partial standings; `null` for an unknown code, like `getPollState`. Returns standings joined with
+  each option's `text` plus `ballotCount`.
+- **`advancePhase` transition map** gained the `voting → revealed` entry (M4 left it out); the map is
+  now the full one-way chain `lobby → voting → revealed`, and `revealed` is terminal (absent from the
+  map → "cannot advance"). Still host-gated by the secret `hostToken`.
+- **Host closes voting from the Voting screen.** Added a host-only "End voting & reveal results"
+  control there (mirrors the lobby's "Start voting"; gated on `getHostToken(code)`, calls
+  `advancePhase`). The reactive `getPollState` phase flip swaps every client to the reveal in lockstep.
+- **Reveal screen** (`src/routes/Reveal.tsx`, rendered by the `Room` dispatcher for the `revealed`
+  phase): subscribes to `getResults`; winner spotlight + full standings as CSS bars (bar width =
+  share of the winning score — **no chart dependency added**). Handles a **tie** (top score shared →
+  "It's a tie", names all leaders) and the **all-rejected** edge (top score 0 → "No clear winner").
+  Uses `state.poll` for the header so it paints instantly while `getResults` catches up ("Tallying…").
+- **Host "new poll" control** (FE-5.2): the reveal offers the host a "Start a new poll" button
+  (→ `/create`); everyone gets "Back to home". A true "new round" that resets the *same* poll (clear
+  ballots, phase → lobby/voting, live for the room) would need a new `resetPoll` mutation — deferred
+  as an M6 host-control (see §11) rather than pulled into M5 scope.
+- **Tests:** `convex/scoring.test.ts` (10 cases: N-1 top weight, full ranking, rejected-zeroing,
+  all-rejected, single ballot, no ballots, first-place tie-break, full-tie createdAt fallback, foreign
+  ids). `polls.test.ts` gained `voting → revealed`, revealed-is-terminal, and `getResults`
+  (null-until-revealed, joined standings, unknown code). Component tests: `Reveal.test.tsx` (tallying,
+  single winner, tie, no-winner, host control) and host-end-voting in `Voting.test.tsx`; `Room.test.tsx`
+  routes to the reveal. `pnpm check` green (64 tests).
+
+- ✅ **BE-5.1** Pure `score(ballots, options, method)` — Borda + cutoff; unit-tested.
+- ✅ **BE-5.2** `advancePhase` (voting → revealed); `getResults` reactive query.
+- ✅ **FE-5.1** Reveal screen: winner spotlight + ranked results bar chart.
+- ✅ **FE-5.2** Host "new round / new poll" control (shipped as "Start a new poll"; reset-round deferred).
+- ✅ 🟢 **Checkpoint MET: END-TO-END MVP.** Create → join → add options → rank → reveal winner, live for the room. This is the first version worth putting in the portfolio.
 
 ### M6 — Polish
 Goal: make it feel finished.

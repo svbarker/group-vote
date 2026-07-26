@@ -6,6 +6,7 @@ import { Button } from '@/components/gv/button'
 import { RoomShell } from './RoomShell'
 import { Lobby } from './Lobby'
 import { Voting } from './Voting'
+import { Reveal } from './Reveal'
 
 // The non-null shape of getPollState — the single source of truth each in-room
 // screen renders from. Derived from the query so the type can't drift.
@@ -54,24 +55,6 @@ export function Room() {
     case 'voting':
       return <Voting state={state} code={code} />
     case 'revealed':
-      return (
-        <RoomShell>
-          <div className="space-y-2 text-center">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Voting closed
-            </h1>
-            <p className="text-muted-foreground text-sm">
-              Results are coming soon.
-            </p>
-          </div>
-          <Button
-            variant="ghost"
-            className="w-full"
-            onClick={() => navigate('/')}
-          >
-            Leave
-          </Button>
-        </RoomShell>
-      )
+      return <Reveal state={state} code={code} />
   }
 }

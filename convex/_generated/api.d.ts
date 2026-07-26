@@ -11,6 +11,7 @@
 import type * as ping from "../ping.js";
 import type * as polls from "../polls.js";
 import type * as roomCode from "../roomCode.js";
+import type * as scoring from "../scoring.js";
 
 import type {
   ApiFromModules,
@@ -22,6 +23,7 @@ declare const fullApi: ApiFromModules<{
   ping: typeof ping;
   polls: typeof polls;
   roomCode: typeof roomCode;
+  scoring: typeof scoring;
 }>;
 
 /**

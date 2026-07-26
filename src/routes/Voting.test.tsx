@@ -4,10 +4,18 @@ import { MemoryRouter } from 'react-router-dom'
 import { Voting } from './Voting'
 import type { PollState } from './Room'
 
-// Capture the submitBallot mutation so we can assert the ranking/rejected split.
-const { submitBallotMock } = vi.hoisted(() => ({ submitBallotMock: vi.fn() }))
-vi.mock('convex/react', () => ({ useMutation: () => submitBallotMock }))
-vi.mock('@/lib/identity', () => ({ getUserId: () => 'me' }))
+// Capture the mutations. Voting uses two (submitBallot + advancePhase); the same
+// spy backs both — tests assert on the call payload, which disambiguates.
+const { mutationMock, getHostTokenMock } = vi.hoisted(() => ({
+  mutationMock: vi.fn(),
+  getHostTokenMock: vi.fn(),
+}))
+const submitBallotMock = mutationMock
+vi.mock('convex/react', () => ({ useMutation: () => mutationMock }))
+vi.mock('@/lib/identity', () => ({
+  getUserId: () => 'me',
+  getHostToken: () => getHostTokenMock(),
+}))
 
 // Option ids are a branded Convex type; cast string fixtures deliberately.
 const oid = (s: string) => s as PollState['options'][number]['id']
@@ -39,7 +47,10 @@ function renderVoting() {
 }
 
 describe('Voting', () => {
-  beforeEach(() => submitBallotMock.mockReset())
+  beforeEach(() => {
+    submitBallotMock.mockReset()
+    getHostTokenMock.mockReset().mockReturnValue(null) // guest by default
+  })
 
   it('renders every option plus the hard-no cutoff line', () => {
     renderVoting()
@@ -80,6 +91,27 @@ describe('Voting', () => {
       userId: 'me',
       ranking: ['o2'],
       rejected: ['o1'],
+    })
+  })
+
+  it('hides the end-voting control from non-host voters', () => {
+    renderVoting()
+    expect(
+      screen.queryByRole('button', { name: /end voting/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('lets the host close voting to reveal results', async () => {
+    getHostTokenMock.mockReturnValue('host-token')
+    const user = userEvent.setup()
+    renderVoting()
+
+    await user.click(
+      screen.getByRole('button', { name: /end voting & reveal results/i }),
+    )
+    expect(mutationMock).toHaveBeenCalledWith({
+      code: 'WXYZ',
+      hostToken: 'host-token',
     })
   })
 

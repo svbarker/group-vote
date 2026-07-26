@@ -28,7 +28,7 @@ import { ChevronDown, ChevronUp, GripVertical, Ban, Undo2 } from 'lucide-react'
 import { api } from '../../convex/_generated/api'
 import { Button } from '@/components/gv/button'
 import { cn } from '@/lib/utils'
-import { getUserId } from '@/lib/identity'
+import { getHostToken, getUserId } from '@/lib/identity'
 import { RoomShell } from './RoomShell'
 import type { PollState } from './Room'
 
@@ -70,7 +70,9 @@ function describePlacement(order: string[], id: string): string {
 export function Voting({ state, code }: { state: PollState; code: string }) {
   const navigate = useNavigate()
   const submitBallot = useMutation(api.polls.submitBallot)
+  const advancePhase = useMutation(api.polls.advancePhase)
   const myUserId = getUserId()
+  const hostToken = getHostToken(code)
   const reducedMotion = useReducedMotion()
 
   const { poll, options, ballotCount, users } = state
@@ -91,6 +93,8 @@ export function Voting({ state, code }: { state: PollState; code: string }) {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [ending, setEnding] = useState(false)
+  const [endError, setEndError] = useState<string | null>(null)
 
   const textById = new Map(options.map((o) => [o.id as string, o.text]))
   const labelOf = (id: string) =>
@@ -179,6 +183,19 @@ export function Voting({ state, code }: { state: PollState; code: string }) {
       setSubmitError('Could not submit your ballot — please try again.')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  // Host closes voting → the reactive query swaps every client to the reveal.
+  async function handleEndVoting() {
+    if (!hostToken || ending) return
+    setEnding(true)
+    setEndError(null)
+    try {
+      await advancePhase({ code, hostToken })
+    } catch {
+      setEndError('Could not end voting — please try again.')
+      setEnding(false)
     }
   }
 
@@ -288,6 +305,27 @@ export function Voting({ state, code }: { state: PollState; code: string }) {
           </p>
         )}
       </div>
+
+      {hostToken && (
+        <div className="space-y-2 border-t border-border pt-4">
+          <Button
+            variant="secondary"
+            className="w-full"
+            onClick={handleEndVoting}
+            disabled={ending}
+          >
+            {ending ? 'Ending…' : 'End voting & reveal results'}
+          </Button>
+          <p className="text-muted-foreground text-center text-xs">
+            Closes voting for everyone and reveals the winner.
+          </p>
+          {endError && (
+            <p role="alert" className="text-center text-sm text-destructive">
+              {endError}
+            </p>
+          )}
+        </div>
+      )}
 
       <Button variant="ghost" className="w-full" onClick={() => navigate('/')}>
         Leave

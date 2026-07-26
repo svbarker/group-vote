@@ -1,6 +1,7 @@
 import { mutation, query } from './_generated/server'
 import { v } from 'convex/values'
 import { generateRoomCode } from './roomCode'
+import { score } from './scoring'
 
 // The room-code space is ~280k; collisions are rare, but retry a few times
 // before giving up so a clash never surfaces to the user.
@@ -175,10 +176,12 @@ export const addOption = mutation({
   },
 })
 
-// Phases advance in one direction (PLAN §1). M4 opens voting; the voting →
-// revealed transition lands in M5 alongside scoring, so it's intentionally absent.
-const NEXT_PHASE: Partial<Record<'lobby' | 'voting' | 'revealed', 'voting'>> = {
+// Phases advance in one direction (PLAN §1): lobby → voting → revealed. Any
+// phase missing from the map is terminal (revealed) and can't advance further.
+type Phase = 'lobby' | 'voting' | 'revealed'
+const NEXT_PHASE: Partial<Record<Phase, Phase>> = {
   lobby: 'voting',
+  voting: 'revealed',
 }
 
 // Host-only phase advance. The client proves it's the host by presenting the
@@ -337,6 +340,53 @@ export const getPollState = query({
           addedByUserId: o.addedByUserId,
           createdAt: o.createdAt,
         })),
+    }
+  },
+})
+
+// Reactive query driving the reveal: computed standings (best-first) joined with
+// each option's text. Only meaningful once the host has revealed (PLAN §6), so
+// it returns null in earlier phases — this keeps partial standings from leaking
+// to a client polling mid-vote. Null for an unknown code, like getPollState.
+export const getResults = query({
+  args: { code: v.string() },
+  handler: async (ctx, args) => {
+    const code = args.code.trim().toUpperCase()
+    const poll = await ctx.db
+      .query('polls')
+      .withIndex('by_code', (q) => q.eq('code', code))
+      .first()
+    if (!poll) return null
+    if (poll.phase !== 'revealed') return null
+
+    const options = (
+      await ctx.db
+        .query('options')
+        .withIndex('by_poll', (q) => q.eq('pollId', poll._id))
+        .collect()
+    ).sort((a, b) => a.createdAt - b.createdAt)
+
+    const ballots = await ctx.db
+      .query('ballots')
+      .withIndex('by_poll', (q) => q.eq('pollId', poll._id))
+      .collect()
+
+    const textById = new Map(options.map((o) => [o._id as string, o.text]))
+    const standings = score(
+      ballots.map((b) => ({ ranking: b.ranking, rejected: b.rejected })),
+      options.map((o) => o._id),
+      poll.scoringMethod,
+    )
+
+    return {
+      poll: { code: poll.code, title: poll.title },
+      ballotCount: ballots.length,
+      standings: standings.map((s) => ({
+        optionId: s.optionId,
+        text: textById.get(s.optionId) ?? '',
+        score: s.score,
+        firstPlaceVotes: s.firstPlaceVotes,
+      })),
     }
   },
 })
