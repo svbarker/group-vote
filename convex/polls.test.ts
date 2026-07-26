@@ -155,13 +155,25 @@ describe('advancePhase', () => {
     ).rejects.toThrow(/only the host/i)
   })
 
-  test('will not advance past voting yet (revealed is M5)', async () => {
+  test('host closes voting (voting → revealed)', async () => {
     const t = setup()
     const { code, hostToken } = await hostAPoll(t)
-    await t.mutation(api.polls.advancePhase, { code, hostToken })
+    await t.mutation(api.polls.advancePhase, { code, hostToken }) // → voting
+    const { phase } = await t.mutation(api.polls.advancePhase, {
+      code,
+      hostToken,
+    }) // → revealed
+    expect(phase).toBe('revealed')
+  })
+
+  test('revealed is terminal — cannot advance further', async () => {
+    const t = setup()
+    const { code, hostToken } = await hostAPoll(t)
+    await t.mutation(api.polls.advancePhase, { code, hostToken }) // → voting
+    await t.mutation(api.polls.advancePhase, { code, hostToken }) // → revealed
     await expect(
       t.mutation(api.polls.advancePhase, { code, hostToken }),
-    ).rejects.toThrow(/cannot advance from the voting phase/i)
+    ).rejects.toThrow(/cannot advance from the revealed phase/i)
   })
 })
 
@@ -314,5 +326,50 @@ describe('getPollState', () => {
     const { code } = await hostAPoll(t)
     const state = await t.query(api.polls.getPollState, { code })
     expect(state?.poll).not.toHaveProperty('hostToken')
+  })
+})
+
+describe('getResults', () => {
+  // Host a poll with two options, take it through voting, and reveal it.
+  async function revealedPoll(t: ReturnType<typeof setup>) {
+    const { code, hostToken } = await hostAPoll(t, {
+      seedOptions: ['Pizza', 'Tacos'],
+    })
+    await t.mutation(api.polls.advancePhase, { code, hostToken }) // → voting
+    const state = await t.query(api.polls.getPollState, { code })
+    const [pizza, tacos] = state!.options.map((o) => o.id)
+    return { code, hostToken, pizza, tacos }
+  }
+
+  test('is null until the poll is revealed (no mid-vote leak)', async () => {
+    const t = setup()
+    const { code, hostToken } = await hostAPoll(t, { seedOptions: ['Pizza'] })
+    expect(await t.query(api.polls.getResults, { code })).toBeNull() // lobby
+    await t.mutation(api.polls.advancePhase, { code, hostToken })
+    expect(await t.query(api.polls.getResults, { code })).toBeNull() // voting
+  })
+
+  test('returns standings joined with option text, best-first', async () => {
+    const t = setup()
+    const { code, hostToken, pizza, tacos } = await revealedPoll(t)
+    await t.mutation(api.polls.submitBallot, {
+      code,
+      userId: 'user-host',
+      ranking: [tacos, pizza],
+      rejected: [],
+    })
+    await t.mutation(api.polls.advancePhase, { code, hostToken }) // → revealed
+
+    const results = await t.query(api.polls.getResults, { code })
+    expect(results?.ballotCount).toBe(1)
+    expect(results?.standings).toEqual([
+      { optionId: tacos, text: 'Tacos', score: 1, firstPlaceVotes: 1 },
+      { optionId: pizza, text: 'Pizza', score: 0, firstPlaceVotes: 0 },
+    ])
+  })
+
+  test('returns null for an unknown code', async () => {
+    const t = setup()
+    expect(await t.query(api.polls.getResults, { code: 'ZZZZ' })).toBeNull()
   })
 })

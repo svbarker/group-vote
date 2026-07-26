@@ -74,4 +74,26 @@ describe('Room', () => {
       screen.getByRole('button', { name: /submit ranking/i }),
     ).toBeInTheDocument()
   })
+
+  it('renders the reveal screen once the poll is revealed', () => {
+    // The mock returns one value for every useQuery; this object satisfies both
+    // getPollState (Room reads .poll.phase) and getResults (Reveal reads
+    // .standings), so Room routes to the reveal and it renders the winner.
+    useQueryMock.mockReturnValue({
+      poll: {
+        code: 'WXYZ',
+        title: 'Dinner',
+        phase: 'revealed',
+        allowUserOptions: true,
+        createdAt: 0,
+      },
+      ballotCount: 1,
+      users: [{ userId: 'me', name: 'Mo', isHost: false, joinedAt: 1 }],
+      options: [{ id: 'o1', text: 'Pizza', addedByUserId: 'me', createdAt: 1 }],
+      standings: [{ optionId: 'o1', text: 'Pizza', score: 2, firstPlaceVotes: 1 }],
+    })
+    renderRoom()
+    expect(screen.getByText(/results ·/i)).toBeInTheDocument()
+    expect(screen.getByText(/winner/i)).toBeInTheDocument()
+  })
 })
